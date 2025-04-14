@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Dentistry Topics{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Welcome to Dentistry Resource Center</h1>
+    <p class="lead">Explore various dentistry topics and expand your knowledge.</p>
+    <hr class="my-4">
+    {% if not user %}
+    <p>Please sign in to access all features.</p>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('signin') }}" role="button">Sign In</a>
+    {% endif %}
+</div>
+
+<h2 class="mt-5 mb-4">Available Topics</h2>
+
+{% if topics %}
+<div class="row">
+    {% for topic in topics %}
+    <div class="col-md-4">
+        <div class="card topic-card">
+            <div class="card-body">
+                <h5 class="card-title">{{ topic }}</h5>
+                <p class="card-text">Explore questions and resources related to {{ topic }}.</p>
+                <a href="#" class="btn btn-outline-primary">View Topic</a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    No topics available yet. Check back later!
+</div>
+{% endif %}
+{% endblock %}
