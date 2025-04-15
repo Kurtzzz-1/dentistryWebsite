@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Test: {{ topic }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-3 text-center">Test: <span class="text-primary">{{ topic }}</span></h2>
+    <div class="alert alert-info text-center mb-4">
+        <span id="timer" class="fw-bold"></span> left
+    </div>
+    <form id="test-form" method="post">
+        {% for q in questions %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Question {{ loop.index }}:</h5>
+                <p class="card-text">{{ q.question }}</p>
+
+                <!-- Display options based on question type -->
+                <div class="options mt-3">
+                    {% if q.question_type == QuestionType.MULTIPLE_CHOICE or q.question_type == QuestionType.TRUE_FALSE
+                    %}
+                    {% for option in q.options %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="question_{{ q.question_id }}"
+                            id="q{{ q.question_id }}_opt{{ loop.index0 }}" value="{{ loop.index0 }}">
+                        <label class="form-check-label" for="q{{ q.question_id }}_opt{{ loop.index0 }}">
+                            {{ option }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                    {% elif q.question_type == QuestionType.MULTIPLE_ANSWER %}
+                    {% for option in q.options %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="question_{{ q.question_id }}"
+                            id="q{{ q.question_id }}_opt{{ loop.index0 }}" value="{{ loop.index0 }}">
+                        <label class="form-check-label" for="q{{ q.question_id }}_opt{{ loop.index0 }}">
+                            {{ option }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary">Submit Test</button>
+        </div>
+    </form>
+    <div class="mt-4 text-center">
+        <a href="{{ url_for('index') }}" class="btn btn-link">Back to Topics</a>
+    </div>
+</div>
+<script>
+    // Simple countdown timer
+    let duration = Number('{{ duration }}') * 60; // seconds
+    const timerElem = document.getElementById('timer');
+    function updateTimer() {
+        const min = Math.floor(duration / 60);
+        const sec = duration % 60;
+        timerElem.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+        if (duration > 0) {
+            duration--;
+            setTimeout(updateTimer, 1000);
+        } else {
+            timerElem.textContent = 'Time is up!';
+            // Optionally disable inputs before submitting
+            document.querySelectorAll('#test-form input').forEach(input => input.disabled = true);
+            document.getElementById('test-form').submit();
+        }
+    }
+    updateTimer();
+
+    // Handle form submission (optional: add client-side validation or confirmation)
+    // document.getElementById('test-form').addEventListener('submit', function(event) {
+    //     // Example: Confirm submission
+    //     // if (!confirm('Are you sure you want to submit?')) {
+    //     //     event.preventDefault();
+    //     // }
+    // });
+</script>
+{% endblock %}

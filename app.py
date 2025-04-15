@@ -1,10 +1,20 @@
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, g, redirect, render_template, request, url_for
 
-from utils.local_db_utils import get_table_names, get_topics
-from utils.supabase_utils import get_supabase_client, get_user_from_session
+from utils.local_db_utils import (
+    get_num_questions_topic,
+    get_questions_for_topic,
+    get_table_names,
+    get_topics,
+)
+from utils.question_class import QuestionType
+from utils.supabase_utils import (
+    get_supabase_client,
+    get_user_from_session,
+    is_valid_credentails_for_signup,
+)
 
 # Load environment variables
 load_dotenv()
@@ -17,18 +27,21 @@ app.secret_key = "your-secret-key"  # Replace with a secure secret key
 supabase = get_supabase_client()
 
 
+@app.before_request
+def load_user():
+    """
+    Load the user from the session and store in flask.g for each request.
+    """
+    g.user = get_user_from_session(supabase)
+
+
 # Login required decorator
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Pass the main supabase client instance
-        user = get_user_from_session(supabase)
-        if user is None:
-            flash("Please sign in to access this page.", "warning")
+        if g.user is None:
+            # flash("Please sign in to access this page.", "warning")
             return redirect(url_for("signin"))
-        # Pass the user object to the decorated function if needed
-        # Or store it in flask.g for access within the request context
-        # For now, just proceed if user exists
         return f(*args, **kwargs)
 
     return decorated_function
@@ -40,16 +53,10 @@ def index():
     """
     Home route that returns a welcome message and lists all topics.
     """
-    # Pass the main supabase client instance
-    user = get_user_from_session(supabase)
-    # It's generally better practice to get the user once,
-    # potentially in the decorator and store in flask.g,
-    # but passing the client here works for now.
     topics = get_topics()
     if not topics:
         flash("No topics available.", "warning")
-
-    return render_template("index.html", user=user, topics=topics)
+    return render_template("index.html", user=g.user, topics=topics)
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -60,13 +67,17 @@ def signup():
     if request.method == "POST":
         email = request.form.get("email")
         password = request.form.get("password")
+        confirm_password = request.form.get("confirm_password")  # Get confirm password
 
-        if not email or not password:
+        error = is_valid_credentails_for_signup(email, password, confirm_password)
+
+        if error:
+            flash(error, "danger")
             return redirect(url_for("signup"))
 
         # Call Supabase signup function
         try:
-            response = supabase.auth.sign_up(email=email, password=password)
+            response = supabase.auth.sign_up({"email": email, "password": password})
 
             print("Signup response user:", response.user)
             print("Signup response session:", response.session)
@@ -75,6 +86,7 @@ def signup():
                 flash("Signup successful!", "success")
         except Exception as e:
             print("Error during signup:", e)
+            flash("Signup failed. Please try again.", "danger")
             return redirect(url_for("signup"))
 
         return redirect(url_for("index"))
@@ -183,6 +195,52 @@ def auth_callback_google():
         print("Error during Google auth callback:", e)
         flash(f"Authentication failed: {e}. Please try again.", "danger")
         return redirect(url_for("signin"))
+
+
+@app.route("/test_config/<topic>", methods=["GET", "POST"])
+@login_required
+def test_config(topic):
+    """
+    Page to configure test settings for a selected topic.
+    Allows user to choose number of questions and test duration.
+    """
+    topics = get_topics()
+    if topic not in topics:
+        flash("Invalid topic selected.", "danger")
+        return redirect(url_for("index"))
+
+    # Get the maximum number of questions available for this topic
+    max_questions = get_num_questions_topic(topic)
+    # Ensure we have at least 1 question available
+    max_questions = max(1, max_questions)
+
+    if request.method == "POST":
+        num_questions = int(request.form.get("num_questions", 5))
+        # Limit num_questions to available questions
+        num_questions = min(num_questions, max_questions)
+        duration = int(request.form.get("duration", 10))  # in minutes
+        # Fetch questions for the topic
+        questions = get_questions_for_topic(topic, num_questions)
+        # Store config in session or pass to test page (not implemented here)
+        return render_template(
+            "test_page.html",
+            topic=topic,
+            questions=questions,
+            duration=duration,
+            user=g.user,
+            QuestionType=QuestionType,
+        )
+
+    # Default values for form - ensure default is not greater than max
+    default_num_questions = min(5, max_questions)
+    return render_template(
+        "test_config.html",
+        topic=topic,
+        user=g.user,
+        default_num_questions=default_num_questions,
+        default_duration=10,
+        max_questions=max_questions,
+    )
 
 
 if __name__ == "__main__":

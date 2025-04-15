@@ -56,3 +56,31 @@ def get_user_from_session(supabase_client: supabase.Client) -> dict | None:
         print(f"Error getting user from session: {e}")
 
     return None
+
+
+def is_valid_credentails_for_signup(
+    email: str, password: str, confirm_password: str
+) -> str | None:
+    """
+    Validate the credentials for signup.
+
+    Args:
+        email (str): The email address.
+        password (str): The password.
+        confirm_password (str): The confirmation password.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    if not email or not password or not confirm_password:
+        return "All fields are required."
+
+    if len(password) < 8:
+        return "Password must be at least 8 characters long."
+
+    if password != confirm_password:
+        return "Passwords do not match."
+
+    if ("@" not in email) or ("." not in email.split("@")[-1]):
+        return "Invalid email address."
+    return None
