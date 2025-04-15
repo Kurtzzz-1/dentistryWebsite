@@ -21,18 +21,17 @@ supabase = get_supabase_client()
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        user = get_user_from_session()
+        # Pass the main supabase client instance
+        user = get_user_from_session(supabase)
         if user is None:
             flash("Please sign in to access this page.", "warning")
             return redirect(url_for("signin"))
+        # Pass the user object to the decorated function if needed
+        # Or store it in flask.g for access within the request context
+        # For now, just proceed if user exists
         return f(*args, **kwargs)
 
     return decorated_function
-
-
-if __name__ == "__main__":
-    print(get_table_names())
-    app.run(debug=True)
 
 
 @app.route("/")
@@ -41,10 +40,15 @@ def index():
     """
     Home route that returns a welcome message and lists all topics.
     """
-    user = get_user_from_session()
+    # Pass the main supabase client instance
+    user = get_user_from_session(supabase)
+    # It's generally better practice to get the user once,
+    # potentially in the decorator and store in flask.g,
+    # but passing the client here works for now.
     topics = get_topics()
     if not topics:
         flash("No topics available.", "warning")
+
     return render_template("index.html", user=user, topics=topics)
 
 
@@ -148,16 +152,42 @@ def auth_callback_google():
     Callback route for Google OAuth sign-in.
     """
     try:
-        # Process the OAuth callback
         code = request.args.get("code")
         if not code:
-            flash("Authentication failed. Please try again.", "danger")
+            flash(
+                "Authentication failed: No code received. Please try again.", "danger"
+            )
             return redirect(url_for("signin"))
 
-        # Verification is handled automatically by Supabase
-        flash("Sign-in successful!", "success")
-    except Exception as e:
-        print("Error during Google auth callback:", e)
-        flash("Authentication failed. Please try again.", "danger")
+        # Exchange the authorization code for a session
+        session_response = supabase.auth.exchange_code_for_session({"auth_code": code})
 
-    return redirect(url_for("index"))
+        # Check if the session exchange was successful
+        if session_response and session_response.user:
+            flash("Sign-in successful!", "success")
+            # Session is set by Supabase client, redirect to the main page
+            return redirect(url_for("index"))
+        else:
+            print(
+                "Error during Google auth callback - code exchange failed:",
+                session_response,
+            )
+            flash(
+                "Authentication failed during code exchange. Please try again.",
+                "danger",
+            )
+            return redirect(url_for("signin"))
+
+    except Exception as e:
+        # Catch potential exceptions during the code exchange
+        print("Error during Google auth callback:", e)
+        flash(f"Authentication failed: {e}. Please try again.", "danger")
+        return redirect(url_for("signin"))
+
+
+if __name__ == "__main__":
+    print("Registered routes:")
+    print(app.url_map)
+    print("-" * 30)  # Separator for clarity
+    print(get_table_names())
+    app.run(debug=True, host="0.0.0.0", port=5000)
